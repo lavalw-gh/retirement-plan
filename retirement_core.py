@@ -23,7 +23,7 @@ matplotlib.use("Agg")
 
 @dataclass
 class Inputs:
-    current_age: int = 40
+    current_age: int = 51
     pension_access_age: int = 57
     state_pension_age: int = 67
     life_expectancy: int = 85
