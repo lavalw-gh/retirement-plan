@@ -104,14 +104,14 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
         0, inputs.life_expectancy - inputs.state_pension_age + 1)
     pv_pre_state_at_access = _safe_pv_annuity(
         inputs.annual_spending_today, rr, years_access_to_state
-    )
+    ) * (1 + rr)    
     if inputs.include_state_pension:
         gap_today = max(
             0.0, inputs.annual_spending_today - inputs.state_pension_annual_today
         )
     else:
         gap_today = inputs.annual_spending_today
-    pv_gap_at_state_age = _safe_pv_annuity(gap_today, rr, years_state_to_end)
+    pv_gap_at_state_age = _safe_pv_annuity(gap_today, rr, years_state_to_end) * (1 + rr)
     pv_gap_at_access = (
         pv_gap_at_state_age / ((1 + rr) ** years_access_to_state)
         if years_access_to_state > 0
@@ -144,7 +144,7 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
             if years_access_to_state > 0:
                 # Before State Pension: you need full spending; after: only the gap
                 temp_shortfall = inputs.annual_spending_today - gap_today  # typically the State Pension amount (capped by spending)
-                pv_temp = _safe_pv_annuity(temp_shortfall, rr, years_access_to_state)
+                pv_temp = _safe_pv_annuity(temp_shortfall, rr, years_access_to_state) * (1 + rr)
                 pension_needed_at_access_base = (gap_today * mult) + pv_temp
             else:
                 # State Pension already active at pension access
@@ -366,16 +366,14 @@ def plot_scenario_set(base: Inputs, out_png: str) -> pd.DataFrame:
     )
     scenarios.append(
         (
-            f"Higher inflation (+{base.adj_inflation*100:.2f}%)",
-            Inputs(
-                **{**asdict(base), "inflation_rate": base.inflation_rate + base.adj_inflation}),
+            f"Inflation adjustment ({base.adj_inflation*100:+.2f}%)",
+            ...
         )
     )
     scenarios.append(
         (
-            f"Higher returns (+{base.adj_return*100:.2f}%)",
-            Inputs(
-                **{**asdict(base), "nominal_return": base.nominal_return + base.adj_return}),
+            f"Returns adjustment ({base.adj_return*100:+.2f}%)",
+            ...
         )
     )
 
@@ -485,6 +483,12 @@ def plot_scenario_set(base: Inputs, out_png: str) -> pd.DataFrame:
     tdf = summary.copy()
     for c in ["TotalNeededToday", "ISANeededToday", "PensionNeededToday"]:
         tdf[c] = tdf[c].map(lambda v: f"£{v:,.0f}")
+    tdf.columns = [
+        "Scenario",
+        "Total\nNeeded Today",
+        "ISA\nNeeded Today",
+        "Pension\nNeeded Today",
+    ]
     tbl = ax.table(
         cellText=tdf.values.tolist(),
         colLabels=list(tdf.columns),
@@ -493,18 +497,13 @@ def plot_scenario_set(base: Inputs, out_png: str) -> pd.DataFrame:
     )
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(9)
-    tbl.scale(1.0, 1.8)
-    ax.set_title("Capital required (today)", fontweight="bold")
-    fig.suptitle("Retirement scenario comparison",
-                 fontsize=14, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 0.82, 0.96])
-    fig.savefig(out_png, dpi=200, bbox_inches="tight")
-    plt.close(fig)
-    return summary
+    tbl.scale(1.0, 1.9)
+    tbl.auto_set_column_width(col=list(range(len(tdf.columns))))
+    ax.set_title("Capital needed today", fontweight="bold")
+
 # ----------------------------
 # DOCX report (accepts BytesIO)
 # ----------------------------
-
 
 def create_pension_report(
     out_docx: Union[str, IO[bytes]],
