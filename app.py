@@ -131,10 +131,10 @@ st.subheader("Scenario comparison")
 st.image(str(scenario_png))
 
 st.subheader("Projection table (base scenario)")
-st.dataframe(df.style.format(precision=2))
+st.dataframe(df.style.format("{:,.2f}"))
 
 st.subheader("Scenario summary table")
-st.dataframe(scenario_summary.style.format(precision=2))
+st.dataframe(scenario_summary.style.format("{:,.2f}"))
 
 @st.dialog("Quick Start Guide")
 def show_help_dialog():
