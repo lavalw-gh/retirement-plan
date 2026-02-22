@@ -356,24 +356,22 @@ def plot_scenario_set(base: Inputs, out_png: str) -> pd.DataFrame:
     scenarios.append(
         (
             f"Conservative (SWR {base.adj_swr*100:.1f}%)",
-            Inputs(**{**asdict(base), "swr": base.adj_swr,
-                   "sizing_method": "SWR"}),
+            Inputs(**{**asdict(base), "swr": base.adj_swr, "sizing_method": "SWR"}),
         )
     )
     scenarios.append(
-        ("PV (mathematical min)", Inputs(
-            **{**asdict(base), "sizing_method": "PV"}))
+        ("PV (mathematical min)", Inputs(**{**asdict(base), "sizing_method": "PV"}))
     )
     scenarios.append(
         (
             f"Inflation adjustment ({base.adj_inflation*100:+.2f}%)",
-            ...
+            Inputs(**{**asdict(base), "inflation_rate": base.inflation_rate + base.adj_inflation}),
         )
     )
     scenarios.append(
         (
             f"Returns adjustment ({base.adj_return*100:+.2f}%)",
-            ...
+            Inputs(**{**asdict(base), "nominal_return": base.nominal_return + base.adj_return}),
         )
     )
 
