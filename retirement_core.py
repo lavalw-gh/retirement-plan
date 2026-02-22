@@ -188,7 +188,8 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
             portfolio_withdrawal = spending_nominal
 
             if has_actuals:
-                act_isa *= (1 + inputs.nominal_return)
+                if act_isa > 0:
+                    act_isa *= (1 + inputs.nominal_return)
                 act_pension *= (1 + inputs.nominal_return)
                 act_isa -= spending_nominal
         else:
@@ -199,7 +200,8 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
             portfolio_withdrawal = withdrawal_needed
 
             if has_actuals:
-                act_isa *= (1 + inputs.nominal_return)
+                if act_isa > 0:
+                    act_isa *= (1 + inputs.nominal_return)
                 act_pension -= withdrawal_needed
                 act_pension *= (1 + inputs.nominal_return)
 
@@ -254,7 +256,7 @@ def plot_single_projection(
         ax.plot(df["Age"], df["Actual_Pension_Balance"], lw=1.8, label="Actual Pension", color="#F18F01", ls=":")
         
         # Highlight ISA Shortfall before pension access
-        bridge_mask = df["Age"] < inputs.pension_access_age
+        bridge_mask = df["Age"] <= inputs.pension_access_age
         if (df.loc[bridge_mask, "Actual_ISA_Balance"] < 0).any():
             ax.fill_between(
                 df.loc[bridge_mask, "Age"],
