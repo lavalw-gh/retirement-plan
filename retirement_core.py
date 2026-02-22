@@ -218,6 +218,9 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
                 "Pension_Balance": bal_pension,
                 "Total_Balance": total_bal,
                 "Actual_Total_Balance": act_total,
+                # --- NEW: Track separate actuals ---
+                "Actual_ISA_Balance": act_isa if has_actuals else None,
+                "Actual_Pension_Balance": act_pension if has_actuals else None,
             }
         )
     df = pd.DataFrame(projection)
@@ -240,16 +243,29 @@ def plot_single_projection(
     fig, axes = plt.subplots(2, 1, figsize=(13, 9), sharex=True)
     # Balances
     ax = axes[0]
-    ax.plot(df["Age"], df["Total_Balance"], lw=2.6,
-            label="Total (Target)", color="#2E86AB")
-    ax.plot(df["Age"], df["ISA_Balance"], lw=1.8,
-            label="ISA (Target)", color="#A23B72")
-    ax.plot(df["Age"], df["Pension_Balance"], lw=1.8,
-            label="Pension (Target)", color="#F18F01")
-
+    ax.plot(df["Age"], df["Total_Balance"], lw=2.6, label="Total (Target)", color="#2E86AB")
+    ax.plot(df["Age"], df["ISA_Balance"], lw=1.8, label="ISA (Target)", color="#A23B72")
+    ax.plot(df["Age"], df["Pension_Balance"], lw=1.8, label="Pension (Target)", color="#F18F01")
+    
+    # --- NEW: Plot separate actuals and highlight shortfall ---
     if "Actual_Total_Balance" in df.columns and df["Actual_Total_Balance"].notna().any():
-        ax.plot(df["Age"], df["Actual_Total_Balance"], lw=2.6,
-                label="Actual Total", color="black", ls="-.")
+        ax.plot(df["Age"], df["Actual_Total_Balance"], lw=2.6, label="Actual Total", color="black", ls="--")
+        ax.plot(df["Age"], df["Actual_ISA_Balance"], lw=1.8, label="Actual ISA", color="#A23B72", ls=":")
+        ax.plot(df["Age"], df["Actual_Pension_Balance"], lw=1.8, label="Actual Pension", color="#F18F01", ls=":")
+        
+        # Highlight ISA Shortfall before pension access
+        bridge_mask = df["Age"] < inputs.pension_access_age
+        if (df.loc[bridge_mask, "Actual_ISA_Balance"] < 0).any():
+            ax.fill_between(
+                df.loc[bridge_mask, "Age"],
+                0,
+                df.loc[bridge_mask, "Actual_ISA_Balance"],
+                where=df.loc[bridge_mask, "Actual_ISA_Balance"] < 0,
+                color="red",
+                alpha=0.25,
+                label="ISA Shortfall (Illiquid)",
+                interpolate=True
+            )
 
     ax.axhline(0, color="red", ls="--", lw=1, alpha=0.6)
     ax.axvline(inputs.pension_access_age, color="orange", ls=":", lw=2)
