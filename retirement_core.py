@@ -96,7 +96,7 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
     bridge_years = inputs.pension_access_age - inputs.current_age
     # ISA bridge sizing
     isa_needed_today = _safe_pv_annuity(
-        inputs.annual_spending_today, rr, bridge_years)
+        inputs.annual_spending_today, rr, bridge_years) * (1 + rr)
     # Post-access phases
     years_access_to_state = max(
         0, inputs.state_pension_age - inputs.pension_access_age)
@@ -193,17 +193,17 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
         withdrawal_needed = max(0.0, spending_nominal - state_pension_nominal)
 
         if age < inputs.pension_access_age:
+            bal_isa -= spending_nominal
             bal_isa *= (1 + inputs.nominal_return)
             bal_pension *= (1 + inputs.nominal_return)
-            bal_isa -= spending_nominal
             source = "ISA"
             portfolio_withdrawal = spending_nominal
-
+            
             if has_actuals:
+                act_isa -= spending_nominal
                 if act_isa > 0:
                     act_isa *= (1 + inputs.nominal_return)
                 act_pension *= (1 + inputs.nominal_return)
-                act_isa -= spending_nominal
         else:
             bal_isa *= (1 + inputs.nominal_return)
             bal_pension -= withdrawal_needed
