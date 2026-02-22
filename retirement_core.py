@@ -134,13 +134,25 @@ def size_capital(inputs: Inputs) -> Tuple[Results, pd.DataFrame, pd.DataFrame]:
         else pension_needed_at_access_pv
     )
     mathematical_min_total_today = isa_needed_today + pension_needed_today_pv
+
     # SWR sizing (add desired end-balance as extra lump sum at access)
     if inputs.sizing_method == "SWR":
         mult = 1.0 / inputs.swr
-        need_pre = inputs.annual_spending_today * \
-            mult if years_access_to_state > 0 else 0.0
-        need_post = gap_today * mult if years_state_to_end > 0 else 0.0
-        pension_needed_at_access_base = max(need_pre, need_post)
+    
+        if years_state_to_end > 0:
+            # You reach State Pension age during the model horizon
+            if years_access_to_state > 0:
+                # Before State Pension: you need full spending; after: only the gap
+                temp_shortfall = inputs.annual_spending_today - gap_today  # typically the State Pension amount (capped by spending)
+                pv_temp = _safe_pv_annuity(temp_shortfall, rr, years_access_to_state)
+                pension_needed_at_access_base = (gap_today * mult) + pv_temp
+            else:
+                # State Pension already active at pension access
+                pension_needed_at_access_base = gap_today * mult
+        else:
+            # You never reach State Pension age (so it must not reduce required pot)
+            pension_needed_at_access_base = inputs.annual_spending_today * mult
+    
         pension_needed_at_access = pension_needed_at_access_base + pv_end_at_access
         pension_needed_today = (
             pension_needed_at_access / ((1 + rr) ** bridge_years)
