@@ -498,6 +498,11 @@ def plot_scenario_set(base: Inputs, out_png: str) -> pd.DataFrame:
     tbl.scale(1.0, 1.9)
     tbl.auto_set_column_width(col=list(range(len(tdf.columns))))
     ax.set_title("Capital needed today", fontweight="bold")
+    fig.suptitle("Retirement scenario comparison", fontsize=14, fontweight="bold")
+    fig.tight_layout(rect=[0, 0, 0.82, 0.96])
+    fig.savefig(out_png, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return summary
 
 # ----------------------------
 # DOCX report (accepts BytesIO)
