@@ -28,7 +28,7 @@ st.title("Retirement Planner – ISA Bridge + Pension")
 # Sidebar inputs
 # ----------------------------
 st.sidebar.header("Assumptions")
-current_age = st.sidebar.number_input("Current age", 18, 100, 51)
+current_age = st.sidebar.number_input("Current age", 18, 100, 40)
 pension_access_age = st.sidebar.number_input("Pension access age", 18, 100, 57)
 state_pension_age = st.sidebar.number_input("State pension age", 18, 100, 67)
 life_expectancy = st.sidebar.number_input("Life expectancy", 50, 110, 85)
