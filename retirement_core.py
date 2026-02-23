@@ -28,7 +28,7 @@ class Inputs:
     state_pension_age: int = 67
     life_expectancy: int = 85
     annual_spending_today: float = 20000.0
-    inflation_rate: float = 0.015
+    inflation_rate: float = 0.025
     nominal_return: float = 0.05
     include_state_pension: bool = True
     state_pension_annual_today: float = 11502.0
