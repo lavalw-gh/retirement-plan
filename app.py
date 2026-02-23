@@ -150,8 +150,8 @@ def show_help_dialog():
     
     #### 2. Spending and returns
     * **Annual spending:** Your desired annual spending in today's money.
-    * **Inflation:** How fast your spending rises over time.
-    * **Return:** Expected long-run nominal investment return.
+    * **Inflation:** How fast your spending rises over time. 2.5% the average used by professional planners
+    * **Return:** Expected long-run nominal investment return. 5% is a good average return for a well-diversified portfolio
     
     #### 3. State Pension
     * **Include State Pension:** If ticked, State Pension reduces how much you must withdraw from your pots.
