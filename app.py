@@ -38,7 +38,7 @@ annual_spending_today = st.sidebar.number_input(
 )
 
 inflation_rate = (
-    st.sidebar.number_input("Inflation (%/yr)", 0.0, 20.0, 1.5, step=0.1) / 100.0
+    st.sidebar.number_input("Inflation (%/yr)", 0.0, 20.0, 2.5, step=0.1) / 100.0
 )
 
 nominal_return = (
