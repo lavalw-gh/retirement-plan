@@ -4,7 +4,7 @@ Core math, dataclasses, and plotting for the retirement planner.
 No Streamlit dependencies here.
 """
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
@@ -277,57 +277,62 @@ def _fmt_k(val: float, _: int) -> str:
     """Formatter for matplotlib axes (e.g. 500000 -> 500k)"""
     return f"{val/1000:,.0f}k"
 
-
 def plot_single_projection(
     inputs: Inputs, results: Results, df: pd.DataFrame, out_png: str
 ) -> None:
     """Single-scenario visualisation (PNG)."""
     fig, axes = plt.subplots(2, 1, figsize=(13, 9), sharex=True)
-    
-    # Balances
+
+    # ----------------------------
+    # (1) Balances
+    # ----------------------------
     ax = axes[0]
     ax.plot(df["Age"], df["Total_Balance"], lw=2.6, label="Total (Target)", color="#2E86AB")
     ax.plot(df["Age"], df["ISA_Balance"], lw=1.8, label="ISA (Target)", color="#A23B72")
     ax.plot(df["Age"], df["Pension_Balance"], lw=1.8, label="Pension (Target)", color="#F18F01")
-    
-    # --- NEW: Plot separate actuals and highlight shortfall ---
+
+    # Optional actuals (kept from your newer build if present)
     if "Actual_Total_Balance" in df.columns and df["Actual_Total_Balance"].notna().any():
         ax.plot(df["Age"], df["Actual_Total_Balance"], lw=2.6, label="Actual Total", color="black", ls="--")
-        ax.plot(df["Age"], df["Actual_ISA_Balance"], lw=1.8, label="Actual ISA", color="#A23B72", ls=":")
-        ax.plot(df["Age"], df["Actual_Pension_Balance"], lw=1.8, label="Actual Pension", color="#F18F01", ls=":")
-        
-        # Highlight ISA Shortfall before pension access
-        bridge_mask = df["Age"] <= inputs.pension_access_age
-        if (df.loc[bridge_mask, "Actual_ISA_Balance"] < 0).any():
-            ax.fill_between(
-                df.loc[bridge_mask, "Age"],
-                0,
-                df.loc[bridge_mask, "Actual_ISA_Balance"],
-                where=df.loc[bridge_mask, "Actual_ISA_Balance"] < 0,
-                color="red",
-                alpha=0.25,
-                label="ISA Shortfall (before access)",
-            )
-            # Clip actual ISA to 0 in plot so it doesn't drop to minus infinity visually
-            df["Actual_ISA_Balance_Plot"] = df["Actual_ISA_Balance"].clip(lower=0)
-            ax.plot(df["Age"], df["Actual_ISA_Balance_Plot"], lw=1.8, color="#A23B72", ls=":")
+        if "Actual_ISA_Balance" in df.columns:
+            ax.plot(df["Age"], df["Actual_ISA_Balance"], lw=1.8, label="Actual ISA", color="#A23B72", ls=":")
+        if "Actual_Pension_Balance" in df.columns:
+            ax.plot(df["Age"], df["Actual_Pension_Balance"], lw=1.8, label="Actual Pension", color="#F18F01", ls=":")
 
-    ax.set_title("Capital progression by phase")
-    ax.set_ylabel("Nominal balance (£)")
+        # Highlight ISA Shortfall before pension access (as per old behaviour)
+        if "Actual_ISA_Balance" in df.columns:
+            bridge_mask = df["Age"] <= inputs.pension_access_age
+            if (df.loc[bridge_mask, "Actual_ISA_Balance"] < 0).any():
+                ax.fill_between(
+                    df.loc[bridge_mask, "Age"],
+                    0,
+                    df.loc[bridge_mask, "Actual_ISA_Balance"],
+                    where=df.loc[bridge_mask, "Actual_ISA_Balance"] < 0,
+                    color="red",
+                    alpha=0.25,
+                    label="ISA Shortfall (Illiquid)",
+                    interpolate=True,
+                )
+
+    ax.axhline(0, color="red", ls="--", lw=1, alpha=0.6)
+
+    # REINSTATED: dotted phase markers on the balances chart (missing in your “new” screenshot)
+    ax.axvline(inputs.pension_access_age, color="orange", ls=":", lw=2)
+    if inputs.include_state_pension:
+        ax.axvline(inputs.state_pension_age, color="green", ls=":", lw=2)
+
+    ax.set_title("Portfolio balances over time", fontsize=13, fontweight="bold")
+    ax.set_ylabel("Balance (£)", fontsize=11)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(_fmt_k))
     ax.grid(True, alpha=0.25)
-    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
-    
-    # Income / spending
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, fontsize=9)
+
+    # ----------------------------
+    # (2) Income / spending
+    # ----------------------------
     ax = axes[1]
-    ax.plot(
-        df["Age"],
-        df["Spending"],
-        lw=2.2,
-        color="red",
-        ls="--",
-        label="Spending",
-    )
+    ax.plot(df["Age"], df["Spending"], lw=2.2, color="red", ls="--", label="Spending")
+
     ax.fill_between(
         df["Age"],
         0,
@@ -336,127 +341,169 @@ def plot_single_projection(
         color="#06A77D",
         label="State pension",
     )
-    
-    # --- NEW: Other Income shading (Blue) ---
+
+    # NEW: Other income shading (blue), stacked above State Pension
+    other = df["OtherIncome"] if "OtherIncome" in df.columns else 0.0
     ax.fill_between(
         df["Age"],
         df["StatePension"],
-        df["StatePension"] + df["OtherIncome"],
-        alpha=0.3,
-        color="#2E86AB", # Blue
+        df["StatePension"] + other,
+        alpha=0.30,
+        color="#2E86AB",
         label="Other income",
     )
+
     ax.fill_between(
         df["Age"],
-        df["StatePension"] + df["OtherIncome"],
-        df["StatePension"] + df["OtherIncome"] + df["PortfolioWithdrawal"],
+        df["StatePension"] + other,
+        df["StatePension"] + other + df["PortfolioWithdrawal"],
         alpha=0.45,
         color="#D4B483",
         label="Portfolio withdrawal",
     )
-    
-    ax.axvline(
-        inputs.pension_access_age, color="orange", ls=":", lw=2, label="Pension access"
-    )
-    if inputs.include_state_pension:
-        ax.axvline(
-            inputs.state_pension_age,
-            color="green",
-            ls=":",
-            lw=2,
-            label="State pension starts",
-        )
 
-    ax.set_title("Annual spending and income sources",
-                 pad=15, fontsize=12, loc="left")
-    ax.set_ylabel("Nominal income / spending (£)")
+    ax.axvline(inputs.pension_access_age, color="orange", ls=":", lw=2, label="Pension access")
+    if inputs.include_state_pension:
+        ax.axvline(inputs.state_pension_age, color="green", ls=":", lw=2, label="State pension starts")
+
+    ax.set_title("Annual spending and income sources", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Age (years)", fontsize=11)
+    ax.set_ylabel("Annual amount (£)", fontsize=11)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(_fmt_k))
-    ax.set_xlabel("Age")
     ax.grid(True, alpha=0.25)
-    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, fontsize=9)
 
     fig.suptitle(
-        f"Retirement Plan (Method: {inputs.sizing_method})"
-        f" | Total Target today: £{results.total_needed_today:,.0f}"
+        f"Retirement projection | sizing={inputs.sizing_method}"
+        f" | return={inputs.nominal_return:.1%} | inflation={inputs.inflation_rate:.1%}"
         f" | spending=£{inputs.annual_spending_today:,.0f} (today)",
-        fontsize=14,
         y=0.98,
+        fontsize=12,
     )
-    plt.tight_layout(rect=[0, 0, 0.85, 0.95])
-    plt.savefig(out_png, dpi=150)
-    plt.close()
+    fig.tight_layout(rect=[0, 0, 0.82, 0.96])
+    fig.savefig(out_png, dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
+def plot_scenario_set(base: Inputs, out_png: str) -> pd.DataFrame:
+    """Scenario-comparison visualisation (PNG) + summary dataframe."""
+    scenarios: List[Tuple[str, Inputs]] = []
+    scenarios.append(("Base (SWR 4%)", base))
+    scenarios.append(
+        (
+            f"Conservative (SWR {base.adj_swr*100:.1f}%)",
+            Inputs(**{**asdict(base), "swr": base.adj_swr, "sizing_method": "SWR"}),
+        )
+    )
+    scenarios.append(("PV (mathematical min)", Inputs(**{**asdict(base), "sizing_method": "PV"})))
+    scenarios.append(
+        (
+            f"Inflation adjustment ({base.adj_inflation*100:+.2f}%)",
+            Inputs(**{**asdict(base), "inflation_rate": base.inflation_rate + base.adj_inflation}),
+        )
+    )
+    scenarios.append(
+        (
+            f"Returns adjustment ({base.adj_return*100:+.2f}%)",
+            Inputs(**{**asdict(base), "nominal_return": base.nominal_return + base.adj_return}),
+        )
+    )
 
-def plot_scenario_set(base_inputs: Inputs, out_png: str) -> pd.DataFrame:
-    """
-    Produce a suite of scenarios by tweaking key inputs.
-    Returns summary DataFrame of required capital across scenarios.
-    Plots a multi-line comparison and saves to out_png.
-    """
-    scenarios = [
-        ("1. Base", copy.deepcopy(base_inputs)),
-    ]
-
-    # Scenario 2: Conservative SWR
-    if base_inputs.sizing_method == "SWR":
-        s2 = copy.deepcopy(base_inputs)
-        s2.swr = base_inputs.adj_swr
-        scenarios.append((f"2. Conserv SWR ({s2.swr*100:.1f}%)", s2))
-    else:
-        # PV doesn't use SWR, so just do a lower return scenario instead
-        s2 = copy.deepcopy(base_inputs)
-        s2.nominal_return -= base_inputs.adj_return
-        scenarios.append(("2. Lower return (-0.5%)", s2))
-
-    # Scenario 3: Higher inflation
-    s3 = copy.deepcopy(base_inputs)
-    s3.inflation_rate += base_inputs.adj_inflation
-    scenarios.append(("3. High inflation (+0.5%)", s3))
-
-    # Scenario 4: Lower returns
-    s4 = copy.deepcopy(base_inputs)
-    s4.nominal_return -= base_inputs.adj_return
-    scenarios.append(("4. Low returns (-0.5%)", s4))
-
-    # Scenario 5: Lower returns AND high inflation
-    s5 = copy.deepcopy(base_inputs)
-    s5.nominal_return -= base_inputs.adj_return
-    s5.inflation_rate += base_inputs.adj_inflation
-    scenarios.append(("5. Worst case (Low ret + High inf)", s5))
-
-    results_data = []
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    for name, s_inputs in scenarios:
-        res, df, _ = size_capital(s_inputs)
-        results_data.append(
+    summary_rows: List[Dict] = []
+    scenario_results: List[Tuple[str, Inputs, Results, pd.DataFrame]] = []
+    for label, inp in scenarios:
+        res, df, _meta = size_capital(inp)
+        summary_rows.append(
             {
-                "Scenario": name,
-                "Method": s_inputs.sizing_method,
-                "ISA_Needed": res.isa_needed_today,
-                "Pension_Needed": res.pension_needed_today,
-                "Total_Needed": res.total_needed_today,
+                "Scenario": label,
+                "TotalNeededToday": res.total_needed_today,
+                "ISANeededToday": res.isa_needed_today,
+                "PensionNeededToday": res.pension_needed_today,
             }
         )
-        # Plot target total balance for each scenario
-        ax.plot(df["Age"], df["Total_Balance"], lw=2, label=name)
+        scenario_results.append((label, inp, res, df))
 
-    # Summarise in dataframe
-    summary_df = pd.DataFrame(results_data)
+    summary = pd.DataFrame(summary_rows)
 
-    ax.set_title("Total target capital needed over time (Scenarios)")
-    ax.set_ylabel("Nominal total balance (£)")
+    fig, axes = plt.subplots(2, 2, figsize=(16, 11))
+
+    # (1) Total balance over time
+    ax = axes[0, 0]
+    for label, _inp, _res, df_s in scenario_results:
+        ax.plot(df_s["Age"], df_s["Total_Balance"], lw=2, label=label)
+    ax.axhline(0, color="red", ls="--", lw=1, alpha=0.6)
+    ax.set_title("Total balance over time", fontweight="bold")
+    ax.set_xlabel("Age (years)")
+    ax.set_ylabel("Balance (£)")
     ax.yaxis.set_major_formatter(plt.FuncFormatter(_fmt_k))
-    ax.set_xlabel("Age")
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right")
+    ax.grid(True, alpha=0.25)
+    ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
 
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=150)
-    plt.close()
+    # (2) ISA vs pension needed today (bar chart)
+    ax = axes[0, 1]
+    x = np.arange(len(summary))
+    w = 0.38
+    ax.bar(x - w / 2, summary["ISANeededToday"], width=w, label="ISA", color="#A23B72")
+    ax.bar(x + w / 2, summary["PensionNeededToday"], width=w, label="Pension", color="#F18F01")
+    ax.set_title("Capital needed today", fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(summary["Scenario"], rotation=30, ha="right", fontsize=8)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(_fmt_k))
+    ax.grid(True, alpha=0.25, axis="y")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
 
-    return summary_df
+    # (3) Base scenario income sources (now includes Other Income)
+    base_label, base_inp, _base_res, base_df = scenario_results[0]
+    ax = axes[1, 0]
+    ax.fill_between(base_df["Age"], 0, base_df["StatePension"], alpha=0.45, color="#06A77D", label="State pension")
 
+    other = base_df["OtherIncome"] if "OtherIncome" in base_df.columns else 0.0
+    ax.fill_between(
+        base_df["Age"],
+        base_df["StatePension"],
+        base_df["StatePension"] + other,
+        alpha=0.30,
+        color="#2E86AB",
+        label="Other income",
+    )
+    ax.fill_between(
+        base_df["Age"],
+        base_df["StatePension"] + other,
+        base_df["StatePension"] + other + base_df["PortfolioWithdrawal"],
+        alpha=0.45,
+        color="#D4B483",
+        label="Portfolio",
+    )
+    ax.plot(base_df["Age"], base_df["Spending"], color="red", ls="--", lw=2, label="Spending")
+    ax.axvline(base_inp.pension_access_age, color="orange", ls=":", lw=2, label="Pension access")
+    if base_inp.include_state_pension:
+        ax.axvline(base_inp.state_pension_age, color="green", ls=":", lw=2, label="State pension")
+    ax.set_title("Base scenario: spending and income", fontweight="bold")
+    ax.set_xlabel("Age (years)")
+    ax.set_ylabel("Annual amount (£)")
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(_fmt_k))
+    ax.grid(True, alpha=0.25)
+    ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
+
+    # (4) Summary table
+    ax = axes[1, 1]
+    ax.axis("off")
+    tdf = summary.copy()
+    for c in ["TotalNeededToday", "ISANeededToday", "PensionNeededToday"]:
+        tdf[c] = tdf[c].map(lambda v: f"£{v:,.0f}")
+    tdf.columns = ["Scenario", "Total\nNeeded Today", "ISA\nNeeded Today", "Pension\nNeeded Today"]
+    tbl = ax.table(cellText=tdf.values.tolist(), colLabels=list(tdf.columns), cellLoc="center", loc="center")
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(9)
+    tbl.scale(1.0, 1.9)
+    tbl.auto_set_column_width(col=list(range(len(tdf.columns))))
+    ax.set_title("Capital needed today", fontweight="bold")
+
+    fig.suptitle("Retirement scenario comparison", fontsize=14, fontweight="bold")
+    fig.tight_layout(rect=[0, 0, 0.82, 0.96])
+    fig.savefig(out_png, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+    return summary
 
 def create_pension_report(
     out_docx,
